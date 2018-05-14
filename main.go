@@ -1,38 +1,37 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"time"
 )
 
+var localIP string
+
 func main() {
-	proxies, err := readFile("./proxy.list")
+	readConfiguration("./config.json")
+
+	proxies, err := readFileList(configuration.FileNameSource)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	concurrency := 300
-
-	log.Printf("Loaded proxies: %d\n", len(proxies))
-
-	in := make(chan string, concurrency)
-	out := make(chan string, concurrency)
+	log.Println("Loaded proxies:", len(proxies))
 
 	var wgcp sync.WaitGroup
 	var wgwf sync.WaitGroup
 
-	wgwf.Add(1)
-	go writeFile(out, &wgwf)
+	in := make(chan string, configuration.Concurency)
+	out := make(chan string, configuration.Concurency)
 
-	for i := 0; i < concurrency; i++ {
+	wgwf.Add(1)
+	go writeFileListChannel(out, &wgwf)
+
+	for i := 0; i < configuration.Concurency; i++ {
 		wgcp.Add(1)
 		go checkProxy(in, out, &wgcp)
 	}
@@ -48,40 +47,30 @@ func main() {
 	wgwf.Wait()
 }
 
-func writeFile(out chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	wf := func(proxyURL string) {
-		f, err := os.OpenFile("./result.list", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		defer f.Close()
-
-		if _, err = f.WriteString(proxyURL + "\n"); err != nil {
-			log.Fatalln(err)
-		}
-	}
-
-	for proxyURL := range out {
-		wf(proxyURL)
-	}
-}
-
 func checkProxy(in chan string, out chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for proxy := range in {
 
 		proxyURL := "tcp://" + proxy
 		parsedProxyURL, _ := url.Parse(proxyURL)
-		timeout := time.Duration(10 * time.Second)
+
 		httpClient := &http.Client{
 			Transport: &http.Transport{Proxy: http.ProxyURL(parsedProxyURL)},
-			Timeout:   timeout,
+			Timeout:   time.Duration(10 * time.Second),
 		}
-		url := "https://httpbin.org/ip"
-		req, _ := http.NewRequest("GET", url, nil)
+
+		req, _ := http.NewRequest("GET", configuration.HttpbinHost, nil)
+
+		for name, value := range configuration.Cookies {
+			cookie := &http.Cookie{
+				Name:    name,
+				Value:   value,
+				Expires: time.Now().Add(365 * 24 * time.Hour),
+				Domain:  "httpbin.d.ohorodnyk.name",
+			}
+			req.AddCookie(cookie)
+		}
+
 		response, err := httpClient.Do(req)
 		if err != nil {
 			log.Println(proxy, " isn't works ", err)
@@ -96,12 +85,12 @@ func checkProxy(in chan string, out chan string, wg *sync.WaitGroup) {
 				continue
 			}
 			proxyIP, ok := ip["origin"]
-			if ok != true {
+			if ok == false {
 				log.Println("'origin' in JSON from IP request doesn't exists")
 				continue
 			}
 
-			if strings.Split(parsedProxyURL.Host, ":")[0] != proxyIP {
+			if parsedProxyURL.Hostname() != proxyIP {
 				log.Println(proxyIP, "Doesn't equal to the", parsedProxyURL.Host)
 				continue
 			}
@@ -109,26 +98,4 @@ func checkProxy(in chan string, out chan string, wg *sync.WaitGroup) {
 			out <- proxyURL
 		}
 	}
-}
-
-func readFile(fileName string) (lines []string, err error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Fatalln(err)
-		return nil, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-
-	// This is our buffer now
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line != "" {
-			lines = append(lines, line)
-		}
-	}
-
-	return lines, nil
 }
