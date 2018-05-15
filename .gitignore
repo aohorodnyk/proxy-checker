@@ -1,3 +1,4 @@
 /config.json
 *.list
 /proxy-checker
+*.log

@@ -32,7 +32,7 @@ func readFileList(fileName string) (lines []string, err error) {
 func writeFileListChannel(out chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	file, err := os.OpenFile(configuration.FileNameResult, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	file, err := os.OpenFile(configuration.Result, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 	if err != nil {
 		log.Fatalln(err)
 	}

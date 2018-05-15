@@ -2,25 +2,27 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 )
 
-var localIP string
+var sourceIP string
 
 func main() {
 	readConfiguration("./config.json")
 
-	proxies, err := readFileList(configuration.FileNameSource)
+	proxies, err := readFileList(configuration.Source)
 	if err != nil {
 		log.Fatalln(err)
 	}
+	fmt.Println("Loaded proxies:", len(proxies))
 
-	log.Println("Loaded proxies:", len(proxies))
+	sourceIP = getSourceIP()
+	fmt.Println("Local IP:", sourceIP)
 
 	var wgcp sync.WaitGroup
 	var wgwf sync.WaitGroup
@@ -33,7 +35,7 @@ func main() {
 
 	for i := 0; i < configuration.Concurency; i++ {
 		wgcp.Add(1)
-		go checkProxy(in, out, &wgcp)
+		go checkProxyChannel(in, out, &wgcp)
 	}
 
 	for _, proxy := range proxies {
@@ -47,55 +49,35 @@ func main() {
 	wgwf.Wait()
 }
 
-func checkProxy(in chan string, out chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for proxy := range in {
-
-		proxyURL := "tcp://" + proxy
-		parsedProxyURL, _ := url.Parse(proxyURL)
-
-		httpClient := &http.Client{
-			Transport: &http.Transport{Proxy: http.ProxyURL(parsedProxyURL)},
-			Timeout:   time.Duration(10 * time.Second),
-		}
-
-		req, _ := http.NewRequest("GET", configuration.HttpbinHost, nil)
-
-		for name, value := range configuration.Cookies {
-			cookie := &http.Cookie{
-				Name:    name,
-				Value:   value,
-				Expires: time.Now().Add(365 * 24 * time.Hour),
-				Domain:  "httpbin.d.ohorodnyk.name",
-			}
-			req.AddCookie(cookie)
-		}
-
-		response, err := httpClient.Do(req)
-		if err != nil {
-			log.Println(proxy, " isn't works ", err)
-		} else {
-			defer response.Body.Close()
-			body, _ := ioutil.ReadAll(response.Body)
-
-			var ip map[string]string
-			err := json.Unmarshal(body, &ip)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			proxyIP, ok := ip["origin"]
-			if ok == false {
-				log.Println("'origin' in JSON from IP request doesn't exists")
-				continue
-			}
-
-			if parsedProxyURL.Hostname() != proxyIP {
-				log.Println(proxyIP, "Doesn't equal to the", parsedProxyURL.Host)
-				continue
-			}
-
-			out <- proxyURL
-		}
+func getSourceIP() string {
+	httpClient := &http.Client{
+		Timeout: time.Duration(10 * time.Second),
 	}
+
+	req, _ := http.NewRequest("GET", configuration.HttpbinHost, nil)
+
+	addCookies(req)
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatalln(configuration.HttpbinHost, err)
+	}
+
+	defer response.Body.Close()
+	body, _ := ioutil.ReadAll(response.Body)
+
+	var ip map[string]string
+	err = json.Unmarshal(body, &ip)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	proxyIP, ok := ip["origin"]
+	if ok == false {
+		err = proxyError{
+			Message: "'origin' in JSON from IP request doesn't exists",
+		}
+		log.Fatalln(err)
+	}
+
+	return proxyIP
 }
