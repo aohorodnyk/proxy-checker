@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 )
 
 type confType struct {
@@ -27,6 +29,12 @@ func readConfiguration(filename string) {
 		Result:        "./result.list",
 		Protos:        []string{"http", "tcp"},
 		ForbidMixedIP: false,
+	}
+
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		fmt.Println("Using the default configuration")
+		return
 	}
 
 	configData, err := ioutil.ReadFile(filename)
