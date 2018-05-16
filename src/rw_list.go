@@ -21,9 +21,7 @@ func readFileList(fileName string) (lines []string, err error) {
 	// This is our buffer now
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line != "" {
-			lines = append(lines, line)
-		}
+		lines = addLine(lines, line)
 	}
 
 	return lines, nil
@@ -44,4 +42,16 @@ func writeFileListChannel(out chan string, wg *sync.WaitGroup) {
 			log.Fatalln(err)
 		}
 	}
+}
+
+func addLine(lines []string, line string) []string {
+	if line == "" {
+		return lines
+	}
+	for _, value := range lines {
+		if value == line {
+			return lines
+		}
+	}
+	return append(lines, line)
 }
