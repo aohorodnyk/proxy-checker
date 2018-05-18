@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,7 +15,11 @@ var sourceIP string
 
 // Run is main function for comfortable build
 func Run() {
-	readConfiguration("./config.json")
+	config := flag.String("config", "./config.json", "Path to config, can be relative")
+
+	flag.Parse()
+
+	readConfiguration(*config)
 
 	proxies, err := readFileList(configuration.Source)
 	if err != nil {
