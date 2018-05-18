@@ -1,5 +1,5 @@
 /config.json
 *.list
 /proxy-checker
-/proxy-checker.*
+/proxy-checker.exe
 *.log

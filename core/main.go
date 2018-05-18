@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"encoding/json"
@@ -12,7 +12,8 @@ import (
 
 var sourceIP string
 
-func main() {
+// Run is main function for comfortable build
+func Run() {
 	readConfiguration("./config.json")
 
 	proxies, err := readFileList(configuration.Source)
