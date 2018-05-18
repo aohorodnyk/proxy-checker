@@ -33,6 +33,7 @@ func readConfiguration(filename string) {
 
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
+		fmt.Println(filename + " not found")
 		fmt.Println("Using the default configuration")
 		return
 	}
