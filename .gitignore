@@ -3,3 +3,4 @@
 /proxy-checker
 /proxy-checker.exe
 *.log
+/debug
